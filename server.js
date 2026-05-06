@@ -7,13 +7,13 @@ app.use(cors());
 app.use(express.json());
 
 // 🚨 API Key ของบอส
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);;
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.post('/api/generate-story', async (req, res) => {
     try {
         // รับค่า theme เพิ่มเติมมาจากหน้าบ้าน
         const { action, history, turnCount, theme } = req.body;
-        const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-8b" });
 
         // ขยายเวลาการเล่นให้นานขึ้นเป็น 6 ตา เพื่อให้เนื้อเรื่องไม่งง
         const isFinalTurn = turnCount >= 6;
