@@ -14,7 +14,7 @@ app.post('/api/generate-story', async (req, res) => {
     try {
         // รับค่า theme เพิ่มเติมมาจากหน้าบ้าน
         const { action, history, turnCount, theme } = req.body;
-        const model = genAI.getGenerativeModel({ model: "gemma-3-1b" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
         // ขยายเวลาการเล่นให้นานขึ้นเป็น 6 ตา เพื่อให้เนื้อเรื่องไม่งง
         const isFinalTurn = turnCount >= 6;
