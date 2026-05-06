@@ -8,7 +8,7 @@ app.use(express.json());
 
 // 🚨 API Key ของบอส
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-console.log("KEY:", process.env.GEMINI_API_KEY);
+
 
 app.post('/api/generate-story', async (req, res) => {
     try {
@@ -28,13 +28,15 @@ app.post('/api/generate-story', async (req, res) => {
 3. ห้ามใช้คำกำกวมใน image_prompt ให้เน้นที่ตัวละครและสิ่งที่เกิดขึ้นในฉากนั้นๆ
 4. ส่งผลลัพธ์เป็น JSON: { "story": "...", "image_prompt": "...", "choices": ["...", "..."], "is_ending": false }`;
 
-        // --- จุดที่ 2: Prompt สำหรับตอนจบ (isFinalTurn) ---
+        // --- จุดที่ 2: Prompt สำหรับตอนจบ + วิเคราะห์บุคลิกภาพ (isFinalTurn) ---
         if (isFinalTurn) {
-            systemPrompt = `นิทานธีม "${theme}" มาถึงบทสรุปแล้ว
+            systemPrompt = `นิทานธีม "${theme}" มาถึงบทสรุปแล้ว และถึงเวลาวิเคราะห์บุคลิกภาพของผู้เล่นจากตัวเลือกที่ผ่านมา
 กฎเหล็กในการตอบ:
 1. แต่งบทสรุปตอนจบให้สวยงามประทับใจ (ห้ามเกิน 3 ประโยค)
 2. คิดคำอธิบายภาพตอนจบ (image_prompt) เป็นภาษาอังกฤษสั้นๆ ตรงประเด็น
-3. ส่งผลลัพธ์เป็น JSON เป๊ะๆ โครงสร้างนี้เท่านั้น: { "story": "บทสรุปจบ...", "image_prompt": "english final prompt...", "choices": [], "is_ending": true }`;
+3. วิเคราะห์ประวัติการตัดสินใจของผู้เล่นทั้งหมด แล้วสร้าง stats 3 ข้อที่สะท้อนบุคลิกภาพ เช่น ความกล้าหาญ, ความเห็นอกเห็นใจ, ความฉลาด, ความสร้างสรรค์, ความรอบคอบ ฯลฯ ให้เหมาะกับธีมของเรื่อง
+4. ค่า value ต้องเป็นตัวเลข 0-100 สะท้อนพฤติกรรมจริงของผู้เล่น ห้ามให้ทุกข้อเท่ากัน
+5. ส่งผลลัพธ์เป็น JSON เป๊ะๆ โครงสร้างนี้เท่านั้น: { "story": "บทสรุปจบ...", "image_prompt": "english final prompt...", "choices": [], "is_ending": true, "stats": [{"trait": "ชื่อคุณลักษณะ", "value": 80}, {"trait": "ชื่อคุณลักษณะ", "value": 45}, {"trait": "ชื่อคุณลักษณะ", "value": 90}] }`;
         }
 
         const prompt = `${systemPrompt}\n\nประวัติการเล่าที่ผ่านมา: ${history}\nสิ่งที่เกิดขึ้นล่าสุด/ผู้เล่นเลือก: ${action}\nแต่งนิทานต่อจากนี้ในรูปแบบ JSON:`;
@@ -54,7 +56,18 @@ app.post('/api/generate-story', async (req, res) => {
 
     } catch (error) {
         console.error("เชี่ยบอส Error ว่ะ:", error);
-        // ถ้า Google เอ๋อ (503) จะส่ง Error ไปบอกหน้าบ้าน
+
+        const errorMsg = error.message ? error.message.toLowerCase() : "";
+        if (error.status === 429 || errorMsg.includes("quota") || errorMsg.includes("429")) {
+            return res.json({
+                story: "⚠️ ระบบขัดข้อง: พลังงานจินตนาการของ AI ประจำวันหมดแล้ว! โปรดแวะมาผจญภัยใหม่ในวันพรุ่งนี้นะครับ",
+                image_prompt: "A sleeping cute red ant, tired, storybook style",
+                choices: [],
+                is_ending: true
+            });
+        }
+
+        // ถ้า Google เอ๋อ (503) หรือ error อื่นๆ
         res.status(500).json({ error: error.message });
     }
 });
