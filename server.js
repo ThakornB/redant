@@ -8,7 +8,7 @@ app.use(express.json());
 
 // 🚨 API Key ของบอส
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
+console.log("KEY:", process.env.GEMINI_API_KEY);
 
 app.post('/api/generate-story', async (req, res) => {
     try {
