@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🚨 API Key ของบอส
+// 🚨 API Key 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 
@@ -16,30 +16,33 @@ app.post('/api/generate-story', async (req, res) => {
         const { action, history, turnCount, theme } = req.body;
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
-        // ขยายเวลาการเล่นให้นานขึ้นเป็น 6 ตา เพื่อให้เนื้อเรื่องไม่งง
-        const isFinalTurn = turnCount >= 6;
+        // --- Unified Game Master Prompt ---
+        const systemPrompt = `คุณคือ Game Master ผู้เล่าเรื่อง RPG สไตล์ไทย ธีมหลัก: "${theme || 'นิทานทั่วไป'}"
 
-        // --- จุดที่ 1: Prompt สำหรับเนื้อเรื่องปกติ ---
-        // ในไฟล์ server.js
-        let systemPrompt = `คุณคือ AI นักแต่งนิทาน RPG ธีมหลัก: "${theme || 'นิทานทั่วไป'}"
-กฎเหล็กในการตอบ:
-1. แต่งเนื้อเรื่องให้สั้นกระชับ (ห้ามเกิน 3 ประโยค) ภาษาไทยเข้าใจง่าย
-2. คิด image_prompt เป็นภาษาอังกฤษ โดยต้องระบุสไตล์ภาพด้วยเสมอ เช่น "Storybook illustration, 2D art, [ชื่อตัวละคร/ฉาก]" 
-3. ห้ามใช้คำกำกวมใน image_prompt ให้เน้นที่ตัวละครและสิ่งที่เกิดขึ้นในฉากนั้นๆ
-4. ส่งผลลัพธ์เป็น JSON: { "story": "...", "image_prompt": "...", "choices": ["...", "..."], "is_ending": false }`;
+หน้าที่ของคุณคือวิเคราะห์การกระทำของผู้เล่นและตัดสินใจว่าเรื่องควรดำเนินต่อหรือจบลงอย่างเป็นธรรมชาติ
 
-        // --- จุดที่ 2: Prompt สำหรับตอนจบ + วิเคราะห์บุคลิกภาพ (isFinalTurn) ---
-        if (isFinalTurn) {
-            systemPrompt = `นิทานธีม "${theme}" มาถึงบทสรุปแล้ว และถึงเวลาวิเคราะห์บุคลิกภาพของผู้เล่นจากตัวเลือกที่ผ่านมา
-กฎเหล็กในการตอบ:
-1. แต่งบทสรุปตอนจบให้สวยงามประทับใจ (ห้ามเกิน 3 ประโยค)
-2. คิดคำอธิบายภาพตอนจบ (image_prompt) เป็นภาษาอังกฤษสั้นๆ ตรงประเด็น
-3. วิเคราะห์ประวัติการตัดสินใจของผู้เล่นทั้งหมด แล้วสร้าง stats 3 ข้อที่สะท้อนบุคลิกภาพ เช่น ความกล้าหาญ, ความเห็นอกเห็นใจ, ความฉลาด, ความสร้างสรรค์, ความรอบคอบ ฯลฯ ให้เหมาะกับธีมของเรื่อง
-4. ค่า value ต้องเป็นตัวเลข 0-100 สะท้อนพฤติกรรมจริงของผู้เล่น ห้ามให้ทุกข้อเท่ากัน
-5. ส่งผลลัพธ์เป็น JSON เป๊ะๆ โครงสร้างนี้เท่านั้น: { "story": "บทสรุปจบ...", "image_prompt": "english final prompt...", "choices": [], "is_ending": true, "stats": [{"trait": "ชื่อคุณลักษณะ", "value": 80}, {"trait": "ชื่อคุณลักษณะ", "value": 45}, {"trait": "ชื่อคุณลักษณะ", "value": 90}] }`;
+กฎเหล็ก:
+1. แต่งเนื้อเรื่องให้สั้นกระชับ (ไม่เกิน 3 ประโยค) ภาษาไทยเข้าใจง่าย
+2. คิด image_prompt เป็นภาษาอังกฤษ ระบุสไตล์ภาพเสมอ เช่น "Storybook illustration, 2D art, [scene]"
+3. ห้ามใช้คำกำกวมใน image_prompt ให้เน้นตัวละครและเหตุการณ์ในฉาก
+4. วิเคราะห์ว่าการกระทำของผู้เล่นนำไปสู่บทสรุปหรือไม่:
+   - ถ้าผู้เล่น ชนะบอส / เสียชีวิต / บรรลุเป้าหมาย / หรือเรื่องถึงจุดจบตามธรรมชาติ → ตั้ง "is_ending": true
+   - ถ้าเรื่องควรดำเนินต่อไป → ตั้ง "is_ending": false
+5. เมื่อ is_ending เป็น true: วิเคราะห์ประวัติการตัดสินใจของผู้เล่นทั้งหมด สร้าง stats 3 ข้อสะท้อนบุคลิกภาพ (0-100) ห้ามให้ทุกข้อเท่ากัน และตั้ง choices เป็น []
+6. เมื่อ is_ending เป็น false: ให้ 2 ตัวเลือกใน choices
+
+รูปแบบ JSON ที่ต้องส่งกลับเสมอ:
+{ "story": "...", "image_prompt": "...", "choices": ["...", "..."], "is_ending": false }
+หรือเมื่อจบเรื่อง:
+{ "story": "...", "image_prompt": "...", "choices": [], "is_ending": true, "stats": [{"trait": "ชื่อคุณลักษณะ", "value": 80}, {"trait": "ชื่อคุณลักษณะ", "value": 45}, {"trait": "ชื่อคุณลักษณะ", "value": 90}] }`;
+
+        // --- Failsafe: force ending if story runs too long ---
+        let failsafeInstruction = "";
+        if (turnCount >= 10) {
+            failsafeInstruction = "\n\nCRITICAL RULE: The story has been going on for too long. You MUST wrap up the story gracefully in this turn, provide a final conclusion, and set 'is_ending': true with empty choices.";
         }
 
-        const prompt = `${systemPrompt}\n\nประวัติการเล่าที่ผ่านมา: ${history}\nสิ่งที่เกิดขึ้นล่าสุด/ผู้เล่นเลือก: ${action}\nแต่งนิทานต่อจากนี้ในรูปแบบ JSON:`;
+        const prompt = `${systemPrompt}\n\nประวัติการเล่าที่ผ่านมา: ${history}\nสิ่งที่เกิดขึ้นล่าสุด/ผู้เล่นเลือก: ${action}\nแต่งนิทานต่อจากนี้ในรูปแบบ JSON:${failsafeInstruction}`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
@@ -55,7 +58,7 @@ app.post('/api/generate-story', async (req, res) => {
         res.json(JSON.parse(cleanedJson));
 
     } catch (error) {
-        console.error("เชี่ยบอส Error ว่ะ:", error);
+        console.error("Error :", error);
 
         const errorMsg = error.message ? error.message.toLowerCase() : "";
         if (error.status === 429 || errorMsg.includes("quota") || errorMsg.includes("429")) {
